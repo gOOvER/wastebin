@@ -37,7 +37,12 @@ mod tests {
         let location = res.headers().get("location").unwrap().to_str()?;
         let id = location.replace('/', "");
 
-        let res = client.get(&format!("/delete/{id}")).send().await?;
+        // Changed from GET to POST to match new implementation
+        let res = client
+            .client()
+            .post(&format!("http://{}/delete/{}", client.addr(), id))
+            .send()
+            .await?;
         assert_eq!(res.status(), StatusCode::SEE_OTHER);
 
         let res = client.get(&format!("/{id}")).send().await?;

@@ -12,11 +12,16 @@ use crate::expiration::Expiration;
 use crate::id::Id;
 use read::{DatabaseEntry, ListEntry, Metadata};
 
+/// Minimum password length for encrypted pastes
+const MIN_PASSWORD_LENGTH: usize = 8;
+
 /// Database related errors.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("not allowed to delete")]
     Delete,
+    #[error("password must be at least {MIN_PASSWORD_LENGTH} characters long")]
+    WeakPassword,
     #[error("sqlite error: {0}")]
     Sqlite(rusqlite::Error),
     #[error("migrations error: {0}")]
@@ -171,6 +176,10 @@ pub mod write {
         /// Encrypt if password is set.
         pub async fn encrypt(self) -> Result<DatabaseEntry, Error> {
             let (data, nonce) = if let Some(password) = &self.entry.password {
+                // Validate password strength
+                if password.len() < crate::db::MIN_PASSWORD_LENGTH {
+                    return Err(Error::WeakPassword);
+                }
                 let password = Password::from(password.as_bytes().to_vec());
                 let plaintext = Plaintext::from(self.data);
                 let Encrypted { ciphertext, nonce } = plaintext.encrypt(password).await?;
@@ -547,24 +556,16 @@ impl Handler {
     fn delete_for(&mut self, id: Id, uid: i64) -> Result<(), Error> {
         let tx = self.conn.transaction()?;
 
-        let exists = match tx.query_row(
-            "SELECT 1 FROM entries WHERE (id=?1 AND uid=?2)",
-            params![id.to_i64(), uid],
-            |row| row.get::<_, i64>(0),
-        ) {
-            Ok(_) => true,
-            Err(rusqlite::Error::QueryReturnedNoRows) => false,
-            Err(e) => return Err(Error::Sqlite(e)),
-        };
-
-        if !exists {
-            return Err(Error::Delete);
-        }
-
-        tx.execute(
+        // Try to delete - returns number of affected rows
+        let affected = tx.execute(
             "DELETE FROM entries WHERE (id=?1 AND uid=?2)",
             params![id.to_i64(), uid],
         )?;
+
+        // Don't reveal whether entry exists or uid is wrong - just fail if nothing was deleted
+        if affected == 0 {
+            return Err(Error::Delete);
+        }
 
         tx.commit()?;
         Ok(())

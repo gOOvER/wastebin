@@ -96,7 +96,7 @@ mod tests {
     #[tokio::test]
     async fn burn_encrypted() -> Result<(), Box<dyn std::error::Error>> {
         let client = Client::new(StoreCookies(false)).await;
-        let password = "asd";
+        let password = "test_password_123"; // Changed to meet 8 character minimum
         let data = Entry {
             password: password.to_string(),
             burn_after_reading: Some(String::from("on")),

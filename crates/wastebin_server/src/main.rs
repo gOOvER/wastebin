@@ -22,7 +22,9 @@ use http::header::{
     CONTENT_SECURITY_POLICY, REFERRER_POLICY, SERVER, X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS,
     X_XSS_PROTECTION,
 };
-use tokio::net::{TcpListener, UnixListener};
+use tokio::net::TcpListener;
+#[cfg(unix)]
+use tokio::net::UnixListener;
 use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
 use tower_http::timeout::TimeoutLayer;
@@ -202,7 +204,7 @@ fn make_app(state: AppState, timeout: Duration, max_body_size: usize) -> Router 
         )
         .route("/dl/{id}", get(download::get))
         .route("/raw/{id}", get(raw::get))
-        .route("/delete/{id}", get(delete::form::delete))
+        .route("/delete/{id}", post(delete::form::delete))
         .layer(
             ServiceBuilder::new()
                 .layer(DefaultBodyLimit::max(max_body_size))
@@ -260,11 +262,16 @@ async fn start() -> Result<(), Box<dyn std::error::Error>> {
                     .with_graceful_shutdown(shutdown_signal())
                     .await?;
             }
+            #[cfg(unix)]
             env::SocketType::Unix(path) => {
                 let listener = UnixListener::bind(path)?;
                 axum::serve(listener, app)
                     .with_graceful_shutdown(shutdown_signal())
                     .await?;
+            }
+            #[cfg(not(unix))]
+            env::SocketType::Unix(_) => {
+                return Err("Unix sockets are not supported on this platform".into());
             }
         }
 

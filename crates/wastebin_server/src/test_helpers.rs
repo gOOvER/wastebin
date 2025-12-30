@@ -87,4 +87,12 @@ impl Client {
     pub(crate) fn delete(&self, url: &str) -> RequestBuilder {
         self.client.delete(format!("http://{}{}", self.addr, url))
     }
+
+    pub(crate) fn client(&self) -> &reqwest::Client {
+        &self.client
+    }
+
+    pub(crate) fn addr(&self) -> &SocketAddr {
+        &self.addr
+    }
 }

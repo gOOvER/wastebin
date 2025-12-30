@@ -27,5 +27,8 @@ pub mod vars {
 }
 
 pub(crate) fn password_hash_salt() -> String {
-    std::env::var(vars::PASSWORD_SALT).unwrap_or_else(|_| "somesalt".to_string())
+    std::env::var(vars::PASSWORD_SALT).expect(
+        "WASTEBIN_PASSWORD_SALT environment variable must be set to a secure random value. \
+         Generate one with: openssl rand -base64 32"
+    )
 }
